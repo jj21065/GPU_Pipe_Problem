@@ -9,7 +9,7 @@
 #include<windows.h>
 #define N 11
 #define NN 29
-#define TPB 29
+#define TPB 1
 #define BPG (N+TPB-1)/TPB
 float *Q; // 29
 float *d_Q; // 29
@@ -59,6 +59,7 @@ void CopyMemToHost( int n)
 
 __global__ void Compute_Q(float* pQ, float*dR, int n);
 __global__ void Add_Q(float* pQ, float*dR, int n);
+
 int main()
 {
 	
@@ -98,7 +99,7 @@ int main()
 	Q[28] = 0;
 
 	int n = 2;
-	int iter_no = 200;
+	int iter_no = 300;
 	int i;
 
 	printf("inital Q[0] = %g\n", Q[0]);
@@ -234,6 +235,12 @@ __global__ void Compute_Q(float* pQ,float*dR,int n )
 __global__ void Add_Q(float* pQ,float*dR ,int n)
 {
 	int i = blockDim.x*blockIdx.x + threadIdx.x;
+
+	switch (i)
+	{
+	default:
+		break;
+	}
 	pQ[1] = pQ[1] + dR[0] + dR[9];
 	pQ[3] = pQ[3] + dR[0] - dR[1];
 	pQ[6] = pQ[6] + dR[0] - dR[8];
