@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <math.h>
 #define N 29
+#define TPB 29
+#define BPG (N+TPB-1)/TPB
 float *Q;
 float *d_Q;
 void Allocate_Memory(int n)
@@ -26,7 +28,7 @@ void Free_Memory()
 	printf("Free mem : %s\n", cudaGetErrorString(error));
 }
 
-void CopyMemToDevice(float *data, int n)
+void CopyMemToDevice(int n)
 {
 	/*for (int i = 0; i < n; i++)
 	{
@@ -37,7 +39,7 @@ void CopyMemToDevice(float *data, int n)
 	printf("Memcpy Host to Device : %s\n", cudaGetErrorString(error));
 }
 
-void CopyMemToHost(float *data, int n)
+void CopyMemToHost( int n)
 {
 	cudaError_t error = cudaMemcpy(Q, d_Q, n*sizeof(float), cudaMemcpyDeviceToHost);
 	printf("Memcpy Device to Host : %s\n", cudaGetErrorString(error));
@@ -46,11 +48,13 @@ void CopyMemToHost(float *data, int n)
 	data[i] = R[i];
 	}*/
 }
-__global__ void Compute_Q(float* Q, int n);
+
+__global__ void Compute_Q(float* pQ, int n);
+
 int main()
 {
 	
-
+	float rs0 = 1;
 	Allocate_Memory(N);
 
 	Q[0] = sqrt(10.0 / rs0);
@@ -83,23 +87,23 @@ int main()
 	Q[27] = Q[0];
 	Q[28] = 0;
 
-	CopyMemToDevice(Q, N);
-
-	
-
-	// initial conditions 
-
-
 	int n = 2;
-	int iter_no = 5000;
+	int iter_no = 1;
 	int i;
-	clock_t t1 = clock();
+
 	printf("inital Q[0] = %g\n", Q[0]);
+
+
+	clock_t t1 = clock();
+	CopyMemToDevice(N);
 	for (i = 0; i < iter_no; i++)
 	{
-	
+		Compute_Q<<<BPG,TPB>>>(Q, N);
 	}
+	CopyMemToHost(N);
 	clock_t t2 = clock();
+
+
 
 	printf("time consume : %f", t2 - t1);
 	//	printf("abs = %g\n",myabs(-2));
