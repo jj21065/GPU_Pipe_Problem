@@ -98,11 +98,11 @@ int main()
 	Q[28] = 0;
 
 	int n = 2;
-	int iter_no = 5000;
+	int iter_no = 200;
 	int i;
 
 	printf("inital Q[0] = %g\n", Q[0]);
-
+	// add time consume compute
 	LARGE_INTEGER startTime, endTime, fre;
 	double times;
 	QueryPerformanceFrequency(&fre); //¨ú±oCPUÀW²v
