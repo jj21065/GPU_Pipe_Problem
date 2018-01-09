@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
-float myabs(float);
-float mypow(float, int);
+#include<windows.h>
+
 int main()
 {
 	// pipe parameter 
@@ -92,7 +92,13 @@ int main()
 	int n = 2;
 	int iter_no = 5000;
 	int i;
-	clock_t t1 = clock();
+	double t1 = clock();
+
+	LARGE_INTEGER startTime, endTime, fre;
+	double times;
+	QueryPerformanceFrequency(&fre); //取得CPU頻率
+	QueryPerformanceCounter(&startTime); //取得開機到現在經過幾個CPU Cycle
+
 	printf("inital Qs0 = %g\n", Qs0);
 	for (i = 0; i < iter_no; i++)
 	{
@@ -163,9 +169,11 @@ int main()
 		Qs0 = Qs0 + R[10] + R[9];
 
 	}
-	clock_t t2 = clock();
-
-	printf("time consume : %f", t2 - t1);
+	double t2 = clock();
+	QueryPerformanceCounter(&endTime); //取得開機到程式執行完成經過幾個CPU Cycle
+	times = ((double)endTime.QuadPart - (double)startTime.QuadPart) / fre.QuadPart;
+	
+	printf("time consume : %f\t%f\n", t2 - t1,times);
 	//	printf("abs = %g\n",myabs(-2));
 	printf("final Qs0 = %g\n", Qs0);
 	printf("final Q9-EA = %g\n", Q9EA);
