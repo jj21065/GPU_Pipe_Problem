@@ -1,15 +1,24 @@
 
 #include "cuda_runtime.h"
 #include "device_launch_parameters.h"
+#include <cuda.h>
+#include <device_functions.h>
+#include <cuda_runtime_api.h>
+#pragma once
+#ifdef __INTELLISENSE__
+void __syncthreads();
+
+#endif
 #include <malloc.h>
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include<windows.h>
+
 #define N 11
 #define NN 29
-#define TPB 1
+#define TPB 2
 #define BPG (N+TPB-1)/TPB
 float *Q; // 29
 float *d_Q; // 29
@@ -59,12 +68,14 @@ void CopyMemToHost( int n)
 
 __global__ void Compute_Q(float* pQ, float*dR, int n);
 __global__ void Add_Q(float* pQ, float*dR, int n);
-
+__global__ void ErrorSum(float *error, int n);
+__global__ void getError(float* dR, float *error, int n);
 int main()
 {
 	
 	
 	Allocate_Memory(N);
+	
 	cudaMemset(dR, 0.0,N*sizeof(float));
 
 	float rs0 = 1;
@@ -80,7 +91,7 @@ int main()
 	Q[9] = 0;
 	Q[10] = 0;
 	Q[11] = 0;
-	Q[12] = 0;
+	Q[12] = Q[0];
 	Q[13] = 0;
 	Q[14] = Q[0];
 	Q[15] = 0;
@@ -95,81 +106,118 @@ int main()
 	Q[24] = 0;
 	Q[25] = 0;
 	Q[26] = 0;
-	Q[27] = Q[0];
+	Q[27] = 0;
 	Q[28] = 0;
 
 	int n = 2;
-	int iter_no = 300;
+	int iter_no = 400;
 	int i;
+	float h_error = 1e5;
+	float*d_error;
+	cudaError_t tmperror = cudaMalloc((void**)&d_error, BPG*sizeof(float));
+	SYSTEMTIME t1,t2;
+	GetLocalTime(&t1);
+	
+	//// main computation 
 
-	printf("inital Q[0] = %g\n", Q[0]);
-	// add time consume compute
-	LARGE_INTEGER startTime, endTime, fre;
-	double times;
-	QueryPerformanceFrequency(&fre); //取得CPU頻率
-	QueryPerformanceCounter(&startTime); //取得開機到現在經過幾個CPU Cycle
-
+	
 	CopyMemToDevice(NN);
-	for (i = 0; i < iter_no; i++)
+	for (i = 0; i < 1000;i++)
 	{
 		Compute_Q<<<BPG,TPB>>>(d_Q,dR, N);
+		getError<<<BPG,TPB>>>(dR, d_error, N);
+		ErrorSum << <1, 1 >> >(d_error, BPG);
+		cudaMemcpy(&h_error, &(d_error[0]), sizeof(float), cudaMemcpyDeviceToHost);
+		/*if (h_error < 1e-8)
+		{
+			break;
+		}*/
 		Add_Q << <1, 1 >> >(d_Q, dR, N);
 		
 	}
 	CopyMemToHost(NN);
+	/////
 
-	QueryPerformanceCounter(&endTime); //取得開機到程式執行完成經過幾個CPU Cycle
-	times = ((double)endTime.QuadPart - (double)startTime.QuadPart) / fre.QuadPart;
+	GetLocalTime(&t2);
+	float time = t2.wSecond - t1.wSecond + (t2.wMilliseconds - t1.wMilliseconds) / 1000.0;
+	printf("iter : %d, time : %g\n", i,time);
+	//printf("time consume : %f\n", times);
+
+	for (int i = 0; i < NN; i++)
+	{
+		printf("Q[%d] : %g\n", i ,Q[i]);
+	}
 	
-
-	printf("time consume : %f\n", times);
-	printf("final Q[0] = %g\n", Q[0]);
-	printf("final Q9-EA = %g\n", Q[27]);
-	printf("final Qh-EB = %g\n", Q[28]);
-
+	cudaFree(d_error);
 	system("pause");
 	Free_Memory();
 	return 0;
 }
+__global__ void ErrorSum(float *error,int n)
+{
+	int i = 0;
+	for (i = 0; i < n; i++)
+	{
+		error[0] = error[0] + error[i];
+	}
+}
+__global__ void getError(float* dR,float *error, int n)
+{
+	
+	__shared__ float c[TPB];
+	int I = threadIdx.x;
+	int i = TPB*blockIdx.x + I;
+	
+	if (i < n)
+		c[I] = dR[i]*dR[i];
+	for (int stride = blockDim.x / 2; stride > 0; stride = stride / 2)
+	{
+		if (I < stride){
+			c[I] += c[I + stride];
+		}
+		__syncthreads();
+	}
 
-__global__ void Compute_Q(float* pQ,float*dR,int n )
+	if (I == 0)
+		error[blockIdx.x] = c[0];
+}
+__global__ void Compute_Q(float* pQ, float*dR, int n)
 {
 	int i = blockDim.x*blockIdx.x + threadIdx.x;
 	// pipe parameter 
+	float rs0 = 1;
 	float r01 = 1;
 	float r16 = 5;
-	float r12 = 1;
 	float r03 = 5;
-	float r34 = 3;
+	float r12 = 1;
 
+	float r34 = 3;
 	float r24 = 1;
 	float r25 = 1;
 	float r56 = 3;
-	float r3e = 1;
 	float r47 = 1;
-
+	
 	float r57 = 1;
 	float r78 = 2;
-	float r89 = 3;
 	float r69 = 3;
+	float r89 = 3;
+	float r9EA = 1;
 
+	float r3e = 1;
 	float r8a = 1;
+	float rab = 3;
+	float rad = 2;
+	float r9g = 1;
+
 	float reb = 2;
 	float rdg = 5;
-	float ref = 5;
-
-	float rab = 3;
 	float rbc = 2;
-	float r9g = 1;
-	float rcf = 2;
-
-	float rad = 2;
 	float rdc = 1;
+
+	float ref = 5;
+	float rcf = 2;
 	float rgh = 1;
 	float rfh = 2;
-
-	float rs0 = 1;
-	float r9EA = 1;
 	float rhEB = 1;
 
 	//float R[11] = { 0 };
@@ -180,50 +228,50 @@ __global__ void Compute_Q(float* pQ,float*dR,int n )
 		// calculate adjust flow pQ
 		if (i == 0)
 		{
-			if (2 * (r01*abs(pQ[1]) + r12*abs(pQ[3]) + r24*abs(pQ[6]) + r34*abs(pQ[5]) + r03*abs(pQ[4])) > 0)
-				dR[0] = -(r01*pQ[1] * abs(pQ[1]) + r12*pQ[3] * abs(pQ[3]) + r24*pQ[6] * abs(pQ[6]) - r34*pQ[5] * abs(pQ[5]) - r03*pQ[4] * abs(pQ[4])) / (2 * (r01*abs(pQ[1]) + r12*abs(pQ[3]) + r24*abs(pQ[6]) + r34*abs(pQ[5]) + r03*abs(pQ[4])));
-		}
+			if (2 * (r01*abs(pQ[1]) + r12*abs(pQ[4]) + r24*abs(pQ[6]) + r34*abs(pQ[5]) + r03*abs(pQ[3])) > 0)
+				dR[0] = -(r01*pQ[1] * abs(pQ[1]) + r12*pQ[4] * abs(pQ[4]) + r24*pQ[6] * abs(pQ[6]) - r34*pQ[5] * abs(pQ[5]) - r03*pQ[3] * abs(pQ[3])) / (2 * (r01*abs(pQ[1]) + r12*abs(pQ[4]) + r24*abs(pQ[6]) + r34*abs(pQ[5]) + r03*abs(pQ[3])));
+		} 
 		else if (i == 1)
 		{
-			if (2 * (r16*abs(pQ[2]) + r56*abs(pQ[8]) + r25*abs(pQ[7]) + r12*abs(pQ[3])) > 0)
-				dR[1] = -(r16*pQ[2] * abs(pQ[2]) - r56*pQ[8] * abs(pQ[8]) - r25*pQ[7] * abs(pQ[7]) - r12*pQ[3] * abs(pQ[3])) / (2 * (r16*abs(pQ[2]) + r56*abs(pQ[8]) + r25*abs(pQ[7]) + r12*abs(pQ[3])));
+			if (2 * (r16*abs(pQ[2]) + r56*abs(pQ[8]) + r25*abs(pQ[7]) + r12*abs(pQ[4])) > 0)
+				dR[1] = -(r16*pQ[2] * abs(pQ[2]) - r56*pQ[8] * abs(pQ[8]) - r25*pQ[7] * abs(pQ[7]) - r12*pQ[4] * abs(pQ[4])) / (2 * (r16*abs(pQ[2]) + r56*abs(pQ[8]) + r25*abs(pQ[7]) + r12*abs(pQ[4])));
 		}
 		else if (i == 2){
-			if (2 * (r34*abs(pQ[5]) + r47*abs(pQ[10]) + r78*abs(pQ[12]) + r8a*abs(pQ[15]) + rab*abs(pQ[19]) + reb*abs(pQ[16]) + r3e*abs(pQ[9])) > 0)
-				dR[2] = -(r34*pQ[5] * abs(pQ[5]) + r47*pQ[10] * abs(pQ[10]) + r78*pQ[12] * abs(pQ[12]) + r8a*pQ[15] * abs(pQ[15]) + rab*pQ[19] * abs(pQ[19]) - reb*pQ[16] * abs(pQ[16]) - r3e*pQ[9] * abs(pQ[9])) / (2 * (r34*abs(pQ[5]) + r47*abs(pQ[10]) + r78*abs(pQ[12]) + r8a*abs(pQ[15]) + rab*abs(pQ[19]) + reb*abs(pQ[16]) + r3e*abs(pQ[9])));
+			if (2 * (r34*abs(pQ[5]) + r47*abs(pQ[9]) + r78*abs(pQ[11]) + r8a*abs(pQ[16]) + rab*abs(pQ[17]) + reb*abs(pQ[20]) + r3e*abs(pQ[15])) > 0)
+				dR[2] = -(r34*pQ[5] * abs(pQ[5]) + r47*pQ[9] * abs(pQ[9]) + r78*pQ[11] * abs(pQ[11]) + r8a*pQ[16] * abs(pQ[16]) + rab*pQ[17] * abs(pQ[17]) - reb*pQ[20] * abs(pQ[20]) - r3e*pQ[15] * abs(pQ[15])) / (2 * (r34*abs(pQ[5]) + r47*abs(pQ[9]) + r78*abs(pQ[11]) + r8a*abs(pQ[16]) + rab*abs(pQ[17]) + reb*abs(pQ[20]) + r3e*abs(pQ[15])));
 		}
 		else if (i == 3){
-			if (2 * (r56*abs(pQ[8]) + r69*abs(pQ[14]) + r89*abs(pQ[13]) + r78*abs(pQ[12]) + r57*abs(pQ[11])) > 0)
-				dR[3] = -(r56*pQ[8] * abs(pQ[8]) + r69*pQ[14] * abs(pQ[14]) - r89*pQ[13] * abs(pQ[13]) - r78*pQ[12] * abs(pQ[12]) - r57*pQ[11] * abs(pQ[11])) / (2 * (r56*abs(pQ[8]) + r69*abs(pQ[14]) + r89*abs(pQ[13]) + r78*abs(pQ[12]) + r57*abs(pQ[11])));
+			if (2 * (r56*abs(pQ[8]) + r69*abs(pQ[12]) + r89*abs(pQ[13]) + r78*abs(pQ[11]) + r57*abs(pQ[10])) > 0)
+				dR[3] = -(r56*pQ[8] * abs(pQ[8]) + r69*pQ[12] * abs(pQ[12]) - r89*pQ[13] * abs(pQ[13]) - r78*pQ[11] * abs(pQ[11]) - r57*pQ[10] * abs(pQ[10])) / (2 * (r56*abs(pQ[8]) + r69*abs(pQ[12]) + r89*abs(pQ[13]) + r78*abs(pQ[11]) + r57*abs(pQ[10])));
 		}
 		else if (i == 4){
-			if (2 * (r89*abs(pQ[13]) + r9g*abs(pQ[21]) + rdg*abs(pQ[17]) + rad*abs(pQ[23]) + r8a*abs(pQ[15])) > 0)
-				dR[4] = -(r89*pQ[13] * abs(pQ[13]) - r9g*pQ[21] * abs(pQ[21]) - rdg*pQ[17] * abs(pQ[17]) - rad*pQ[23] * abs(pQ[23]) - r8a*pQ[15] * abs(pQ[15])) / (2 * (r89*abs(pQ[13]) + r9g*abs(pQ[21]) + rdg*abs(pQ[17]) + rad*abs(pQ[23]) + r8a*abs(pQ[15])));
+			if (2 * (r89*abs(pQ[13]) + r9g*abs(pQ[19]) + rdg*abs(pQ[21]) + rad*abs(pQ[18]) + r8a*abs(pQ[16])) > 0)
+				dR[4] = -(r89*pQ[13] * abs(pQ[13]) - r9g*pQ[19] * abs(pQ[19]) - rdg*pQ[21] * abs(pQ[21]) - rad*pQ[18] * abs(pQ[18]) - r8a*pQ[16] * abs(pQ[16])) / (2 * (r89*abs(pQ[13]) + r9g*abs(pQ[19]) + rdg*abs(pQ[21]) + rad*abs(pQ[18]) + r8a*abs(pQ[16])));
 		}
 		else if (i == 5){
-			if (2 * (rad*abs(pQ[23]) + rdc*abs(pQ[24]) + rbc*abs(pQ[20]) + rab*abs(pQ[19])) > 0)
-				dR[5] = -(rad*pQ[23] * abs(pQ[23]) + rdc*pQ[24] * abs(pQ[24]) - rbc*pQ[20] * abs(pQ[20]) - rab*pQ[19] * abs(pQ[19])) / (2 * (rad*abs(pQ[23]) + rdc*abs(pQ[24]) + rbc*abs(pQ[20]) + rab*abs(pQ[19])));
+			if (2 * (rad*abs(pQ[18]) + rdc*abs(pQ[23]) + rbc*abs(pQ[22]) + rab*abs(pQ[17])) > 0)
+				dR[5] = -(rad*pQ[18] * abs(pQ[18]) + rdc*pQ[23] * abs(pQ[23]) - rbc*pQ[22] * abs(pQ[22]) - rab*pQ[17] * abs(pQ[17])) / (2 * (rad*abs(pQ[18]) + rdc*abs(pQ[23]) + rbc*abs(pQ[22]) + rab*abs(pQ[17])));
 		}
 		else if (i == 6){
-			if (2 * (reb*abs(pQ[16]) + rbc*abs(pQ[20]) + rcf*abs(pQ[22]) + ref*abs(pQ[18])) > 0)
-				dR[6] = -(reb*pQ[16] * abs(pQ[16]) + rbc*pQ[20] * abs(pQ[20]) + rcf*pQ[22] * abs(pQ[22]) - ref*pQ[18] * abs(pQ[18])) / (2 * (reb*abs(pQ[16]) + rbc*abs(pQ[20]) + rcf*abs(pQ[22]) + ref*abs(pQ[18])));
+			if (2 * (reb*abs(pQ[20]) + rbc*abs(pQ[22]) + rcf*abs(pQ[25]) + ref*abs(pQ[24])) > 0)
+				dR[6] = -(reb*pQ[20] * abs(pQ[20]) + rbc*pQ[22] * abs(pQ[22]) + rcf*pQ[25] * abs(pQ[25]) - ref*pQ[24] * abs(pQ[24])) / (2 * (reb*abs(pQ[20]) + rbc*abs(pQ[22]) + rcf*abs(pQ[25]) + ref*abs(pQ[24])));
 		}
 		else if (i == 7){
-			if (2 * (rdg*abs(pQ[17]) + rgh*abs(pQ[25]) + rfh*abs(pQ[26]) + rcf*abs(pQ[22]) + rdc*abs(pQ[24])) > 0)
-				dR[7] = -(rdg*pQ[17] * abs(pQ[17]) + rgh*pQ[25] * abs(pQ[25]) - rfh*pQ[26] * abs(pQ[26]) - rcf*pQ[22] * abs(pQ[22]) - rdc*pQ[24] * abs(pQ[24])) / (2 * (rdg*abs(pQ[17]) + rgh*abs(pQ[25]) + rfh*abs(pQ[26]) + rcf*abs(pQ[22]) + rdc*abs(pQ[24])));
+			if (2 * (rdg*abs(pQ[21]) + rgh*abs(pQ[26]) + rfh*abs(pQ[27]) + rcf*abs(pQ[25]) + rdc*abs(pQ[23])) > 0)
+				dR[7] = -(rdg*pQ[21] * abs(pQ[21]) + rgh*pQ[26] * abs(pQ[26]) - rfh*pQ[27] * abs(pQ[27]) - rcf*pQ[25] * abs(pQ[25]) - rdc*pQ[23] * abs(pQ[23])) / (2 * (rdg*abs(pQ[21]) + rgh*abs(pQ[26]) + rfh*abs(pQ[27]) + rcf*abs(pQ[25]) + rdc*abs(pQ[23])));
 		}
 		else if (i == 8)
 		{
-			if (2 * (r25*abs(pQ[7]) + r57*abs(pQ[11]) + r47*abs(pQ[10]) + r24*abs(pQ[6])) > 0)
-				dR[8] = -(r25*pQ[7] * abs(pQ[7]) + r57*pQ[11] * abs(pQ[11]) - r47*pQ[10] * abs(pQ[10]) - r24*pQ[6] * abs(pQ[6])) / (2 * (r25*abs(pQ[7]) + r57*abs(pQ[11]) + r47*abs(pQ[10]) + r24*abs(pQ[6])));
+			if (2 * (r25*abs(pQ[7]) + r57*abs(pQ[10]) + r47*abs(pQ[9]) + r24*abs(pQ[6])) > 0)
+				dR[8] = -(r25*pQ[7] * abs(pQ[7]) + r57*pQ[10] * abs(pQ[10]) - r47*pQ[9] * abs(pQ[9]) - r24*pQ[6] * abs(pQ[6])) / (2 * (r25*abs(pQ[7]) + r57*abs(pQ[10]) + r47*abs(pQ[9]) + r24*abs(pQ[6])));
 		}
 		else if (i == 9){
-			if (2 * (rs0*abs(pQ[0]) + r01*abs(pQ[1]) + r16*abs(pQ[2]) + r69*abs(pQ[14]) + r9EA*abs(pQ[27])) > 0)
-				dR[9] = -(rs0*pQ[0] * abs(pQ[0]) + r01*pQ[1] * abs(pQ[1]) + r16*pQ[2] * abs(pQ[2]) + r69*pQ[14] * abs(pQ[14]) + r9EA*pQ[27] * abs(pQ[27]) - 10) / (2 * (rs0*abs(pQ[0]) + r01*abs(pQ[1]) + r16*abs(pQ[2]) + r69*abs(pQ[14]) + r9EA*abs(pQ[27])));
+			if (2 * (rs0*abs(pQ[0]) + r01*abs(pQ[1]) + r16*abs(pQ[2]) + r69*abs(pQ[12]) + r9EA*abs(pQ[14])) > 0)
+				dR[9] = -(rs0*pQ[0] * abs(pQ[0]) + r01*pQ[1] * abs(pQ[1]) + r16*pQ[2] * abs(pQ[2]) + r69*pQ[12] * abs(pQ[12]) + r9EA*pQ[14] * abs(pQ[14]) - 10) / (2 * (rs0*abs(pQ[0]) + r01*abs(pQ[1]) + r16*abs(pQ[2]) + r69*abs(pQ[12]) + r9EA*abs(pQ[14])));
 		}
 		else if (i == 10){
-			if (2 * (rs0*abs(pQ[0]) + r03*abs(pQ[4]) + r3e*abs(pQ[9]) + ref*abs(pQ[18]) + rfh*abs(pQ[26]) + rhEB*abs(pQ[28])) > 0)
-				dR[10] = -(rs0*pQ[0] * abs(pQ[0]) + r03*pQ[4] * abs(pQ[4]) + r3e*pQ[9] * abs(pQ[9]) + ref*pQ[18] * abs(pQ[18]) + rfh*pQ[26] * abs(pQ[26]) + rhEB*pQ[28] * abs(pQ[28]) - 10) / (2 * (rs0*abs(pQ[0]) + r03*abs(pQ[4]) + r3e*abs(pQ[9]) + ref*abs(pQ[18]) + rfh*abs(pQ[26]) + rhEB*abs(pQ[28])));
+			if (2 * (rs0*abs(pQ[0]) + r03*abs(pQ[3]) + r3e*abs(pQ[15]) + ref*abs(pQ[24]) + rfh*abs(pQ[27]) + rhEB*abs(pQ[28])) > 0)
+				dR[10] = -(rs0*pQ[0] * abs(pQ[0]) + r03*pQ[3] * abs(pQ[3]) + r3e*pQ[15] * abs(pQ[15]) + ref*pQ[24] * abs(pQ[24]) + rfh*pQ[27] * abs(pQ[27]) + rhEB*pQ[28] * abs(pQ[28]) - 10) / (2 * (rs0*abs(pQ[0]) + r03*abs(pQ[3]) + r3e*abs(pQ[15]) + ref*abs(pQ[24]) + rfh*abs(pQ[27]) + rhEB*abs(pQ[28])));
 		}
 		
 	
@@ -234,41 +282,34 @@ __global__ void Compute_Q(float* pQ,float*dR,int n )
 }
 __global__ void Add_Q(float* pQ,float*dR ,int n)
 {
-	int i = blockDim.x*blockIdx.x + threadIdx.x;
-
-	switch (i)
-	{
-	default:
-		break;
-	}
 	pQ[1] = pQ[1] + dR[0] + dR[9];
-	pQ[3] = pQ[3] + dR[0] - dR[1];
+	pQ[4] = pQ[4] + dR[0] - dR[1];
 	pQ[6] = pQ[6] + dR[0] - dR[8];
 	pQ[5] = pQ[5] - dR[0] + dR[2];
-	pQ[4] = pQ[4] - dR[0] + dR[10];
+	pQ[3] = pQ[3] - dR[0] + dR[10];
 	pQ[2] = pQ[2] + dR[1] + dR[9];
 	pQ[8] = pQ[8] - dR[1] + dR[3];
 	pQ[7] = pQ[7] - dR[1] + dR[8];
-	pQ[10] = pQ[10] - dR[8] + dR[2];
-	pQ[12] = pQ[12] + dR[2] - dR[3];
-	pQ[15] = pQ[15] + dR[2] - dR[4];
+	pQ[9] = pQ[19] - dR[8] + dR[2];
+	pQ[11] = pQ[11] + dR[2] - dR[3];
+	pQ[16] = pQ[16] + dR[2] - dR[4];
 
-	pQ[11] = pQ[11] - dR[3] + dR[8];
+	pQ[10] = pQ[10] - dR[3] + dR[8];
 	pQ[13] = pQ[13] - dR[3] + dR[4];
-	pQ[14] = pQ[14] + dR[3] + dR[9];
-	pQ[23] = pQ[23] - dR[4] + dR[5];
-	pQ[21] = pQ[21] - dR[4];
-	pQ[17] = pQ[17] - dR[4] + dR[7];
-	pQ[24] = pQ[24] + dR[5] - dR[7];
-	pQ[25] = pQ[25] + dR[7];
-	pQ[26] = pQ[26] - dR[7] + dR[10];
+	pQ[12] = pQ[12] + dR[3] + dR[9];
+	pQ[18] = pQ[18] - dR[4] + dR[5];
+	pQ[19] = pQ[19] - dR[4];
+	pQ[21] = pQ[21] - dR[4] + dR[7];
+	pQ[23] = pQ[23] + dR[5] - dR[7];
+	pQ[26] = pQ[26] + dR[7];
+	pQ[27] = pQ[27] - dR[7] + dR[10];
 	pQ[28] = pQ[28] + dR[10];
-	pQ[27] = pQ[27] + dR[9];
-	pQ[19] = pQ[19] + dR[2] - dR[5];
-	pQ[16] = pQ[16] - dR[2] + dR[6];
-	pQ[9] = pQ[9] - dR[2] + dR[10];
-	pQ[18] = pQ[18] - dR[6] + dR[10];
-	pQ[20] = pQ[20] - dR[5] + dR[6];
-	pQ[22] = pQ[22] + dR[6] - dR[7];
+	pQ[14] = pQ[14] + dR[9];
+	pQ[17] = pQ[17] + dR[2] - dR[5];
+	pQ[20] = pQ[20] - dR[2] + dR[6];
+	pQ[15] = pQ[15] - dR[2] + dR[10];
+	pQ[24] = pQ[24] - dR[6] + dR[10];
+	pQ[22] = pQ[22] - dR[5] + dR[6];
+	pQ[25] = pQ[25] + dR[6] - dR[7];
 	pQ[0] = pQ[0] + dR[10] + dR[9];
 }
