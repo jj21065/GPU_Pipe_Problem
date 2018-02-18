@@ -6,9 +6,8 @@
 #include <math.h>
 #include <time.h>
 #include<windows.h>
-#include <omp.h>
 
-#define N 5 
+#define N 29
 #define Pr 100.0
 float rs0 = 1;
 
@@ -105,91 +104,86 @@ int main()
 	float QEB = init_Q * 3.0 / 4.0;
 
 
-	//Q[0] = Q01;
-	//Q[1] = Q24;
-	//Q[2] = Q57;
-	//Q[3] = Q16;
-	//Q[4] = Q25;
-	//Q[5] = Q78;
-	//Q[6] = Q12;
-	//Q[7] = Q56;
-	//Q[8] = Q89;
-	//Q[9] = Q03;
-	//Q[10] = Q3e;
-	//Q[11] = Q69;
-	//Q[12] = Q34;
-	//Q[13] = Q47;
-	//Q[14] = Q8a;
-	//Q[15] = Qab;
-	//Q[16] = Qad;
-	//Q[17] = Qeb;
-	//Q[18] = Qbc;
-	//Q[19] = Qdc;
-	//Q[20] = Qdg;
-	//Q[21] = Q9g;
-	//Q[22] = Qgh;
-	//Q[23] = Qef;
-	//Q[24] = Qcf;
-	//Q[25] = Qfh;
-	//Q[26] = QS0;
-	//Q[27] = QEA;
-	//Q[28] = QEB;
+	Q[0] = Q01;
+	Q[1] = Q24;
+	Q[2] = Q57;
+	Q[3] = Q16;
+	Q[4] = Q25;
+	Q[5] = Q78;
+	Q[6] = Q12;
+	Q[7] = Q56;
+	Q[8] = Q89;
+	Q[9] = Q03;
+	Q[10] = Q3e;
+	Q[11] = Q69;
+	Q[12] = Q34;
+	Q[13] = Q47;
+	Q[14] = Q8a;
+	Q[15] = Qab;
+	Q[16] = Qad;
+	Q[17] = Qeb;
+	Q[18] = Qbc;
+	Q[19] = Qdc;
+	Q[20] = Qdg;
+	Q[21] = Q9g;
+	Q[22] = Qgh;
+	Q[23] = Qef;
+	Q[24] = Qcf;
+	Q[25] = Qfh;
+	Q[26] = QS0;
+	Q[27] = QEA;
+	Q[28] = QEB;
 
-	//r[0] = r01;
-	//r[1] = r24;
-	//r[2] = r57;
-	//r[3] = r16;
-	//r[4] = r25;
-	//r[5] = r78;
-	//r[6] = r12;
-	//r[7] = r56;
-	//r[8] = r89;
-	//r[9] = r03;
-	//r[10] = r3e;
-	//r[11] = r69;
-	//r[12] = r34;
-	//r[13] = r47;
-	//r[14] = r8a;
-	//r[15] = rab;
-	//r[16] = rad;
-	//r[17] = reb;
-	//r[18] = rbc;
-	//r[19] = rdc;
-	//r[20] = rdg;
-	//r[21] = r9g;
-	//r[22] = rgh;
-	//r[23] = ref;
-	//r[24] = rcf;
-	//r[25] = rfh;
-	//r[26] = rs0;
-	//r[27] = r9EA;
-	//r[28] = rhEB;
+	r[0] = r01;
+	r[1] = r24;
+	r[2] = r57;
+	r[3] = r16;
+	r[4] = r25;
+	r[5] = r78;
+	r[6] = r12;
+	r[7] = r56;
+	r[8] = r89;
+	r[9] = r03;
+	r[10] = r3e;
+	r[11] = r69;
+	r[12] = r34;
+	r[13] = r47;
+	r[14] = r8a;
+	r[15] = rab;
+	r[16] = rad;
+	r[17] = reb;
+	r[18] = rbc;
+	r[19] = rdc;
+	r[20] = rdg;
+	r[21] = r9g;
+	r[22] = rgh;
+	r[23] = ref;
+	r[24] = rcf;
+	r[25] = rfh;
+	r[26] = rs0;
+	r[27] = r9EA;
+	r[28] = rhEB;
 
 	// initial conditions 
 
-	int iter_no =20;
+	int iter_no =2000;
 	int i;
 	float Error = 1e5;
 
 	SYSTEMTIME t1, t2;
 	GetLocalTime(&t1);
-	Q[0] = 1; Q[1] = 1; Q[2] = 1; Q[3] = 1; Q[4] = 1;
-	r[0] = 1; r[1] = 5; r[2] = 1; r[3] = 1; r[4] = 5;
+
 	for (i = 0; i < iter_no; i++)
 	{
-		//Error = Hardy_Cross_method(Q,r);
+		Error = Hardy_Cross_method(Q,r);
 		/*if (Error < 1e-8)
 			break;*/
-		Newton_Raphson_method(Q, r);
+		//Newton_Raphson_method(Q, r);
 	}
-	
-	
-	
-	
 	GetLocalTime(&t2);
 	float time = t2.wSecond - t1.wSecond + (t2.wMilliseconds - t1.wMilliseconds) / 1000.0;
 	printf("iter : %d, time : %g\n", i, time);
-	for (int i = 0; i < 5; i++)
+	for (int i = 0; i < 29; i++)
 		printf("final Q[%d] = %g\n", i, Q[i]);
 
 	/*
@@ -303,12 +297,8 @@ void Newton_Raphson_method(float *x, float*r)
 void Compute_R(float*x, float*r, float *R)
 {
 
-	R[0] = r[0] * x[0] * x[0] + r[2] * x[2] * x[2] - r[1] * x[1] * x[1];
-	R[1] = r[4] * x[4] * x[4] - r[3] * x[3] * x[3] - r[2] * x[2] * x[2];
-	R[2] = x[0] + x[1] - 10;
-	R[3] = x[1] + x[2] - x[3];
-	R[4] = x[0] - x[2] - x[4];
-	/*R[0] = (r01*x[1] * abs(x[1]) + r12*x[4] * abs(x[4]) + r24*x[6] * abs(x[6]) - r34*x[5] * abs(x[5]) - r03*x[3] * abs(x[3]));
+
+	R[0] = (r01*x[1] * abs(x[1]) + r12*x[4] * abs(x[4]) + r24*x[6] * abs(x[6]) - r34*x[5] * abs(x[5]) - r03*x[3] * abs(x[3]));
 
 	R[1] = (r16*x[2] * abs(x[2]) - r56*x[8] * abs(x[8]) - r25*x[7] * abs(x[7]) - r12*x[4] * abs(x[4]));
 
@@ -364,7 +354,7 @@ void Compute_R(float*x, float*r, float *R)
 
 	R[27] = x[26] + x[27] - x[28];
 
-	R[28] = x[22] + x[23] - x[25];*/
+	R[28] = x[22] + x[23] - x[25];
 
 
 }
@@ -373,12 +363,8 @@ void Compute_invJ_mul_R(float*x, float*r, float*R, float*invJ_R)
 {
 	/// Conjugate gradient method 
 	float A[N*N] = { 0 };
-	A[0] = 2 * r[0] * x[0];   A[5] = 0;					A[10] = 1;	A[15] = 0;	A[20] = 1;
-	A[1] = -2 * r[1] * x[1];  A[6] = 0;					A[11] = 1;	A[16] = 1;	A[21] = 0;
-	A[2] = 2 * r[2] * x[2];   A[7] = -2 * r[2] * x[2];  A[12] = 0;  A[17] = 1;  A[22] = -1;
-	A[3] = 0;				  A[8] = -2 * r[3] * x[3];  A[13] = 0;  A[18] = -1; A[23] = 0;
-	A[4] = 0;				  A[9] = 2 * r[4] * x[4];   A[14] = 0;  A[19] = 0;  A[24] = -1;
-	/*A[0] = 0; A[1] = 2 * r[1] * x[1];  A[4] = 2 * r[4] * x[4]; A[6] = 2 * r[6] * x[6]; A[5] = -2 * r[5] * x[5]; A[3] = -2 * r[3] * x[3];
+	
+	A[0] = 0; A[1] = 2 * r[1] * x[1];  A[4] = 2 * r[4] * x[4]; A[6] = 2 * r[6] * x[6]; A[5] = -2 * r[5] * x[5]; A[3] = -2 * r[3] * x[3];
 
 	A[29] = 0; A[29 + 2] = 2 * r[2] * x[2]; A[29 + 8] = -2 * r[8] * x[8]; A[29 + 7] = -2 * r[7] * x[7]; A[29 + 4] = -2 * r[4] * x[4];
 
@@ -451,7 +437,7 @@ void Compute_invJ_mul_R(float*x, float*r, float*R, float*invJ_R)
 		}
 		fprintf(pfile, "\n");
 	}
-	fclose(pfile);*/
+	fclose(pfile);
 	//	conjgrad(A, invJ_R, R);
 	float Atemp[N*N] = { 0 };
 	//inverse(A, Atemp, N);
@@ -494,7 +480,6 @@ void Sum_Store(float *store, float *x, float scalar, float*v, int n)
 
 void conjgrad(float*A, float*x, float*b)
 {
-	//const int N = 5;
 	float ap[N];
 	float p[N];
 	float rr[N];
@@ -518,8 +503,8 @@ void conjgrad(float*A, float*x, float*b)
 		Sum_Store(x, x, alpha, p, N);
 		Sum_Store(rr, rr, -alpha, ap, N);
 		rsnew = Dot(rr, rr, N);
-		/*if (sqrt(rsnew) < 1e-10)
-			break;*/
+		if (sqrt(rsnew) < 1e-10)
+			break;
 		Sum_Store(p, rr, (rsnew / rsold), p, N);
 		rsold = rsnew;
 
